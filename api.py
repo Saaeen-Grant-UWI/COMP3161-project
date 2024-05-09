@@ -1,23 +1,28 @@
 from flask import Flask, jsonify, request
-import sqlite3
+import mysql.connector
 
 app = Flask(__name__)
 
-def get_db_connection():
-    conn = sqlite3.connect('OurVle_DB')
-    conn.row_factory = sqlite3.Row
+def connection():
+    conn = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="",
+        database="OurVle_DB"
+    )
     return conn
 
 # Register User
 @app.route('/register', methods=['POST'])
-def register_user():
+def register():
     data = request.get_json()
     userid = data['userid']
     password = data['password']
     user_type = data['type']
     try:
-        conn = get_db_connection()
-        conn.execute('INSERT INTO Users (UserID, Password, Type) VALUES (?, ?, ?)',
+        conn = connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO Users (UserID, Password, Type) VALUES (%s, %s, %s)',
                      (userid, password, user_type))
         conn.commit()
         conn.close()
@@ -29,14 +34,16 @@ def register_user():
 
 # User Login
 @app.route('/login', methods=['POST'])
-def user_login():
+def login():
     data = request.get_json()
     userid = data['userid']
     password = data['password']
     try:
-        conn = get_db_connection()
-        user = conn.execute('SELECT * FROM Users WHERE UserID = ? AND Password = ?',
-                            (userid, password)).fetchone()
+        conn = connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM Users WHERE UserID = %s AND Password = %s',
+                            (userid, password))
+        user = cursor.fetchone()
         conn.close()
         if user:
             response = {'message': 'Login successful'}
@@ -55,8 +62,9 @@ def create_course():
     course_code = data['course_code']
     course_name = data['course_name']
     try:
-        conn = get_db_connection()
-        conn.execute('INSERT INTO Courses (CourseCode, CourseName) VALUES (?, ?)',
+        conn = connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO Courses (CourseCode, CourseName) VALUES (%s, %s)',
                      (course_code, course_name))
         conn.commit()
         conn.close()
@@ -68,26 +76,29 @@ def create_course():
 
 # Retrieve Courses
 @app.route('/courses', methods=['GET'])
-def get_courses():
+def courses():
     try:
-        conn = get_db_connection()
-        courses = conn.execute('SELECT * FROM Courses').fetchall()
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT * FROM Courses')
+        courses = cursor.fetchall()
         conn.close()
-        courses_list = [{'CourseCode': course['CourseCode'], 'CourseName': course['CourseName']} for course in courses]
-        return jsonify(courses_list), 200
+        # courses_list = [{'CourseCode': course[0], 'CourseName': course[1]} for course in courses]
+        return jsonify(courses), 200
     except Exception as e:
         response = {'error': str(e)}
         return jsonify(response), 500
 
 # Register for Course
 @app.route('/register_course', methods=['POST'])
-def register_for_course():
+def register_course():
     data = request.get_json()
     student_id = data['student_id']
     course_id = data['course_id']
     try:
-        conn = get_db_connection()
-        conn.execute('INSERT INTO Enrolled (StudentID, CourseID) VALUES (?, ?)',
+        conn = connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO Enrolled (StudentID, CourseID) VALUES (%s, %s)',
                      (student_id, course_id))
         conn.commit()
         conn.close()
@@ -99,28 +110,32 @@ def register_for_course():
 
 # Retrieve Members
 @app.route('/members/<int:course_id>', methods=['GET'])
-def get_course_members(course_id):
+def members(course_id):
     try:
-        conn = get_db_connection()
-        members = conn.execute('SELECT u.UserID, u.Type FROM Users u JOIN Enrolled e ON u.UserID = e.StudentID WHERE e.CourseID = ?',
-                               (course_id,)).fetchall()
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT Users.UserID, Users.Title, Users.FirstName, Users.MiddleName, Users.LastName, Users.Gender, Users.Type FROM Users INNER JOIN Administrates ON Users.UserID = Administrates.AdminID WHERE Administrates.CourseID = %s UNION SELECT Users.UserID, Users.Title, Users.FirstName, Users.MiddleName, Users.LastName, Users.Gender, Users.Type FROM Users INNER JOIN Teaches ON Users.UserID = Teaches.LecturerID WHERE Teaches.CourseID = %s',
+                               (course_id,course_id,))
+        members = cursor.fetchall()
         conn.close()
-        members_list = [{'UserID': member['UserID'], 'Type': member['Type']} for member in members]
-        return jsonify(members_list), 200
+        # members_list = [{'UserID': member[0], 'Type': member[1]} for member in members]
+        return jsonify(members), 200
     except Exception as e:
         response = {'error': str(e)}
         return jsonify(response), 500
 
 # Retrieve Calendar Events
-@app.route('/calendar_events/<int:course_id>', methods=['GET'])
-def get_calendar_events(course_id):
+@app.route('/calendar_events/<int:calendar_event_id>', methods=['GET'])
+def calendar_events(calendar_event_id):
     try:
-        conn = get_db_connection()
-        events = conn.execute('SELECT * FROM CalendarEvents WHERE SectionID IN (SELECT SectionID FROM Sections WHERE CourseID = ?)',
-                              (course_id,)).fetchall()
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT * FROM CalendarEvents WHERE CalendarEventID = %s',
+                              (calendar_event_id,))
+        events = cursor.fetchall()
         conn.close()
-        events_list = [{'CalendarEventID': event['CalendarEventID'], 'StartDate': event['StartDate'], 'EndDate': event['EndDate']} for event in events]
-        return jsonify(events_list), 200
+        # events_list = [{'CalendarEventID': event[0], 'StartDate': event[1], 'EndDate': event[2]} for event in events]
+        return jsonify(events), 200
     except Exception as e:
         response = {'error': str(e)}
         return jsonify(response), 500
@@ -133,8 +148,9 @@ def create_calendar_event():
     start_date = data['start_date']
     end_date = data['end_date']
     try:
-        conn = get_db_connection()
-        conn.execute('INSERT INTO CalendarEvents (SectionID, StartDate, EndDate) VALUES (?, ?, ?)',
+        conn = connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO CalendarEvents (SectionID, StartDate, EndDate) VALUES (%s, %s, %s)',
                      (course_id, start_date, end_date))
         conn.commit()
         conn.close()
@@ -146,15 +162,17 @@ def create_calendar_event():
 
 # Forums
 # Retrieve Forums
-@app.route('/forums/<int:course_id>', methods=['GET'])
-def get_course_forums(course_id):
+@app.route('/forums/<int:forum_id>', methods=['GET'])
+def forums(forum_id):
     try:
-        conn = get_db_connection()
-        forums = conn.execute('SELECT * FROM DiscussionForums WHERE SectionID IN (SELECT SectionID FROM Sections WHERE CourseID = ?)',
-                              (course_id,)).fetchall()
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT * FROM DiscussionForums WHERE DiscussionForumID = %s',
+                              (forum_id,))
+        forums = cursor.fetchall()
         conn.close()
-        forums_list = [{'DiscussionForum': forum['DiscussionForum'], 'DiscussionForumTitle': forum['DiscussionForumTitle']} for forum in forums]
-        return jsonify(forums_list), 200
+        # forums_list = [{'DiscussionForum': forum[0], 'DiscussionForumTitle': forum[1]} for forum in forums]
+        return jsonify(forums), 200
     except Exception as e:
         response = {'error': str(e)}
         return jsonify(response), 500
@@ -163,13 +181,16 @@ def get_course_forums(course_id):
 @app.route('/create_forum', methods=['POST'])
 def create_forum():
     data = request.get_json()
-    course_id = data['course_id']
+    section_id = data['course_id']
     forum_title = data['forum_title']
-    forum_desc = data['forum_desc']
+    created_on = data['created_on']
+    created_by = data['created_by']
+    forum_description = data['forum_description']
     try:
-        conn = get_db_connection()
-        conn.execute('INSERT INTO DiscussionForums (SectionID, DiscussionForumTitle, DiscussionForumDescription) VALUES (?, ?, ?)',
-                     (course_id, forum_title, forum_desc))
+        conn = connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO DiscussionForums (SectionID, CreatedOn, CreatedBy, DiscussionForumTitle, DiscussionForumDescription) VALUES (%s, %s, %s, %s, %s)',
+                     (section_id, created_on, created_by, forum_title, forum_description))
         conn.commit()
         conn.close()
         response = {'message': 'Forum created successfully'}
@@ -180,15 +201,17 @@ def create_forum():
 
 # Discussion Threads
 # Retrieve Threads
-@app.route('/threads/<int:forum_id>', methods=['GET'])
-def get_forum_threads(forum_id):
+@app.route('/threads/<int:forum_thread_id>', methods=['GET'])
+def threads(forum_thread_id):
     try:
-        conn = get_db_connection()
-        threads = conn.execute('SELECT * FROM DiscussionThreads WHERE ForumID = ?',
-                               (forum_id,)).fetchall()
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT * FROM DiscussionThreads WHERE DiscussionThreadID = %s',
+                               (forum_thread_id,))
+        threads = cursor.fetchall()
         conn.close()
-        threads_list = [{'ThreadID': thread['ThreadID'], 'ThreadTitle': thread['ThreadTitle'], 'Post': thread['Post']} for thread in threads]
-        return jsonify(threads_list), 200
+        # threads_list = [{'ThreadID': thread[0], 'ThreadTitle': thread[1], 'Post': thread[2]} for thread in threads]
+        return jsonify(threads), 200
     except Exception as e:
         response = {'error': str(e)}
         return jsonify(response), 500
@@ -198,12 +221,15 @@ def get_forum_threads(forum_id):
 def add_thread():
     data = request.get_json()
     forum_id = data['forum_id']
+    created_on = data['created_on']
+    created_by = data['created_by']
     thread_title = data['thread_title']
-    post = data['post']
+    thread_description = data['thread_description']
     try:
-        conn = get_db_connection()
-        conn.execute('INSERT INTO DiscussionThreads (ForumID, ThreadTitle, Post) VALUES (?, ?, ?)',
-                     (forum_id, thread_title, post))
+        conn = connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO DiscussionThreads (DiscussionForumID, CreatedOn, CreatedBy, DiscussionForumTitle, DiscussionForumDescription) VALUES (%s, %s, %s, %s, %s)',
+                     (forum_id, created_on, created_by, thread_title, thread_description))
         conn.commit()
         conn.close()
         response = {'message': 'Thread added successfully'}
@@ -218,11 +244,16 @@ def add_thread():
 def add_reply():
     data = request.get_json()
     thread_id = data['thread_id']
-    reply = data['reply']
+    created_on = data['created_on']
+    created_by = data['created_by']
+    reply_title = data['reply_title']
+    reply_content = data['reply_content']
+    reply_to_reply = data.get('reply_to_reply', None)  # handling if 'ReplyToReply' is not provided in the request
     try:
-        conn = get_db_connection()
-        conn.execute('INSERT INTO Replies (ThreadID, Reply) VALUES (?, ?)',
-                     (thread_id, reply))
+        conn = connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO DiscussionReplies (DiscussionThreadID, CreatedOn, CreatedBy, DiscussionReplyTitle, DiscussionReplyContent, ReplyToReply) VALUES (%s, %s, %s, %s, %s, %s)',
+                     (thread_id, created_on, created_by, reply_title, reply_content, reply_to_reply))
         conn.commit()
         conn.close()
         response = {'message': 'Reply added successfully'}
@@ -231,17 +262,20 @@ def add_reply():
         response = {'error': str(e)}
         return jsonify(response), 500
 
+
 # Course Content
 # Retrieve Course Content
-@app.route('/course_content/<int:course_id>', methods=['GET'])
-def get_course_content(course_id):
+@app.route('/course_content/<int:course_content_id>', methods=['GET'])
+def course_content(course_content_id):
     try:
-        conn = get_db_connection()
-        content = conn.execute('SELECT * FROM CourseContent WHERE SectionID IN (SELECT SectionID FROM Sections WHERE CourseID = ?)',
-                               (course_id,)).fetchall()
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT * FROM CourseContent WHERE CourseContentID = %s)',
+                               (course_content_id,))
+        content = cursor.fetchall()
         conn.close()
-        content_list = [{'ContentID': item['ContentID'], 'Content': item['Content']} for item in content]
-        return jsonify(content_list), 200
+        # content_list = [{'CourseContentID': item[0], 'Content': item[1]} for item in content]
+        return jsonify(content), 200
     except Exception as e:
         response = {'error': str(e)}
         return jsonify(response), 500
@@ -252,12 +286,13 @@ def get_course_content(course_id):
 def submit_assignment():
     data = request.get_json()
     student_id = data['student_id']
-    course_id = data['course_id']
     assignment_id = data['assignment_id']
+    submission = data['submission']
     try:
-        conn = get_db_connection()
-        conn.execute('INSERT INTO Assignments (StudentID, CourseID, AssignmentID) VALUES (?, ?, ?)',
-                     (student_id, course_id, assignment_id))
+        conn = connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO Submissions (StudentID, AssignmentID, Submission) VALUES (%s, %s, %s)',
+                     (student_id, assignment_id, submission))
         conn.commit()
         conn.close()
         response = {'message': 'Assignment submitted successfully'}
@@ -271,13 +306,13 @@ def submit_assignment():
 def grade_assignment():
     data = request.get_json()
     student_id = data['student_id']
-    course_id = data['course_id']
     assignment_id = data['assignment_id']
     grade = data['grade']
     try:
-        conn = get_db_connection()
-        conn.execute('UPDATE Assignments SET Grade = ? WHERE StudentID = ? AND CourseID = ? AND AssignmentID = ?',
-                     (grade, student_id, course_id, assignment_id))
+        conn = connection()
+        cursor = conn.cursor()
+        cursor.execute('UPDATE Grades SET Grade = %s WHERE StudentID = %s AND AssignmentID = %s',
+                     (grade, student_id, assignment_id))
         conn.commit()
         conn.close()
         response = {'message': 'Assignment graded successfully'}
@@ -289,68 +324,79 @@ def grade_assignment():
 # Reports
 # All courses that have 50 or more students
 @app.route('/courses_with_50_or_more_students', methods=['GET'])
-def get_courses_with_50_or_more_students():
+def courses_with_50_or_more_students():
     try:
-        conn = get_db_connection()
-        courses = conn.execute('SELECT CourseID, COUNT(StudentID) AS StudentCount FROM Enrolled GROUP BY CourseID HAVING StudentCount >= 50').fetchall()
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT CourseID, COUNT(StudentID) AS StudentCount FROM Enrolled GROUP BY CourseID HAVING StudentCount >= 50')
+        courses = cursor.fetchall()
         conn.close()
-        courses_list = [{'CourseID': course['CourseID'], 'StudentCount': course['StudentCount']} for course in courses]
-        return jsonify(courses_list), 200
+        # courses_list = [{'CourseID': course[0], 'StudentCount': course[1]} for course in courses]
+        return jsonify(courses), 200
     except Exception as e:
         response = {'error': str(e)}
         return jsonify(response), 500
 
 # All students that do 5 or more courses
 @app.route('/students_with_5_or_more_courses', methods=['GET'])
-def get_students_with_5_or_more_courses():
+def students_with_5_or_more_courses():
     try:
-        conn = get_db_connection()
-        students = conn.execute('SELECT StudentID, COUNT(CourseID) AS CourseCount FROM Enrolled GROUP BY StudentID HAVING CourseCount >= 5').fetchall()
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT StudentID, COUNT(CourseID) AS CourseCount FROM Enrolled GROUP BY StudentID HAVING CourseCount >= 5')
+        students = cursor.fetchall()
         conn.close()
-        students_list = [{'StudentID': student['StudentID'], 'CourseCount': student['CourseCount']} for student in students]
-        return jsonify(students_list), 200
+        # students_list = [{'StudentID': student[0], 'CourseCount': student[1]} for student in students]
+        return jsonify(students), 200
     except Exception as e:
         response = {'error': str(e)}
         return jsonify(response), 500
 
 # All lecturers that teach 3 or more courses
 @app.route('/lecturers_with_3_or_more_courses', methods=['GET'])
-def get_lecturers_with_3_or_more_courses():
+def lecturers_with_3_or_more_courses():
     try:
-        conn = get_db_connection()
-        lecturers = conn.execute('SELECT UserID, COUNT(CourseID) AS CourseCount FROM Courses GROUP BY UserID HAVING CourseCount >= 3').fetchall()
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT LecturerID, COUNT(CourseID) AS CourseCount FROM Teaches GROUP BY LecturerID HAVING CourseCount >= 3')
+        lecturers = cursor.fetchall()
         conn.close()
-        lecturers_list = [{'UserID': lecturer['UserID'], 'CourseCount': lecturer['CourseCount']} for lecturer in lecturers]
-        return jsonify(lecturers_list), 200
+        # lecturers_list = [{'UserID': lecturer[0], 'CourseCount': lecturer[1]} for lecturer in lecturers]
+        return jsonify(lecturers), 200
     except Exception as e:
         response = {'error': str(e)}
         return jsonify(response), 500
 
 # The 10 most enrolled courses
 @app.route('/top_10_enrolled_courses', methods=['GET'])
-def get_top_10_enrolled_courses():
+def top_10_enrolled_courses():
     try:
-        conn = get_db_connection()
-        courses = conn.execute('SELECT CourseID, COUNT(StudentID) AS StudentCount FROM Enrolled GROUP BY CourseID ORDER BY StudentCount DESC LIMIT 10').fetchall()
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT CourseID, COUNT(StudentID) AS StudentCount FROM Enrolled GROUP BY CourseID ORDER BY StudentCount DESC LIMIT 10')
+        courses = cursor.fetchall()
         conn.close()
-        courses_list = [{'CourseID': course['CourseID'], 'StudentCount': course['StudentCount']} for course in courses]
-        return jsonify(courses_list), 200
+        # courses_list = [{'CourseID': course[0], 'StudentCount': course[1]} for course in courses]
+        return jsonify(courses), 200
     except Exception as e:
         response = {'error': str(e)}
         return jsonify(response), 500
 
 # The top 10 students with the highest overall averages
 @app.route('/top_10_students_highest_averages', methods=['GET'])
-def get_top_10_students_highest_averages():
+def top_10_students_highest_averages():
     try:
-        conn = get_db_connection()
-        students = conn.execute('SELECT StudentID, AVG(Grade) AS AverageGrade FROM Assignments GROUP BY StudentID ORDER BY AverageGrade DESC LIMIT 10').fetchall()
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT StudentID, AVG(Grade) AS AverageGrade FROM Grades GROUP BY StudentID ORDER BY AverageGrade DESC LIMIT 10')
+        students = cursor.fetchall()
         conn.close()
-        students_list = [{'StudentID': student['StudentID'], 'AverageGrade': student['AverageGrade']} for student in students]
-        return jsonify(students_list), 200
+        # students_list = [{'StudentID': student[0], 'AverageGrade': student[1]} for student in students]
+        return jsonify(students), 200
     except Exception as e:
         response = {'error': str(e)}
         return jsonify(response), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
+
