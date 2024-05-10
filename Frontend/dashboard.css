@@ -5,3 +5,10 @@ body{
 .container{
     height: 100%;
 }
+
+img{
+    height: 150px;
+    object-fit: cover;
+    background: black;
+    opacity: 0.6;
+}
