@@ -247,11 +247,15 @@ num_users_type_3 = 100000
 # Starting user ID
 start_user_id = 100000000
 
-sql_query_headers = "TRUNCATE TABLE Users;\nTRUNCATE TABLE Teaches;\nTRUNCATE TABLE Administrates;\nTRUNCATE TABLE Enrolled;\n"
-sql_query_users = "INSERT INTO Users (UserID, Title, FirstName, MiddleName, LastName, Gender, Password, Type) VALUES\n"
+sql_query_headers = "TRUNCATE TABLE Users;\nTRUNCATE TABLE Courses;\nTRUNCATE TABLE Teaches;\nTRUNCATE TABLE Administrates;\nTRUNCATE TABLE Enrolled;\n"
+sql_query_users = "INSERT INTO Users (UserID, Title, FirstName, MiddleName, LastName, Gender, Password, Type, Active) VALUES\n"
+sql_query_courses = "INSERT INTO Courses (CourseCode, CourseName) VALUES\n"
 sql_query_enrolled = "INSERT INTO Enrolled (StudentID, CourseID) VALUES\n"
 sql_query_teaches = "INSERT INTO Teaches (LecturerID, CourseID) VALUES\n"
 sql_query_administrates = "INSERT INTO Administrates (AdminID, CourseID) VALUES\n"
+
+for course in courses_data:
+    sql_query_courses += f"('{course['CourseCode']}','{course['CourseName']}'),\n"
 
 # Generate admin users
 admins = []
@@ -260,7 +264,7 @@ for _ in range(num_users_type_1):
     admin['user_id'] = start_user_id
     admins.append(admin)
     start_user_id += 1
-    sql_query_users += f"({admin['user_id']}, '{admin['title']}', '{admin['first_name']}', '{admin['middle_name']}', '{admin['last_name']}', '{admin['gender']}', '{generate_password()}', 1),\n"
+    sql_query_users += f"({admin['user_id']}, '{admin['title']}', '{admin['first_name']}', '{admin['middle_name']}', '{admin['last_name']}', '{admin['gender']}', '{generate_password()}', 1, 1),\n"
 
 # Generate lecturer users
 lecturers = []
@@ -269,17 +273,24 @@ for _ in range(num_users_type_2):
     lecturer['user_id'] = start_user_id
     lecturers.append(lecturer)
     start_user_id += 1
-    sql_query_users += f"({lecturer['user_id']}, '{lecturer['title']}', '{lecturer['first_name']}', '{lecturer['middle_name']}', '{lecturer['last_name']}', '{lecturer['gender']}', '{generate_password()}', 2),\n"
+    sql_query_users += f"({lecturer['user_id']}, '{lecturer['title']}', '{lecturer['first_name']}', '{lecturer['middle_name']}', '{lecturer['last_name']}', '{lecturer['gender']}', '{generate_password()}', 2, 1),\n"
 
 
 # Generate student users
 students = []
-for _ in range(num_users_type_3):
+
+for _ in range(num_users_type_3-1):
     student = generate_full_name()
     student['user_id'] = start_user_id
     students.append(student)
     start_user_id += 1
-    sql_query_users += f"({student['user_id']}, '{student['title']}', '{student['first_name']}', '{student['middle_name']}', '{student['last_name']}', '{student['gender']}', '{generate_password()}', 3),\n"
+    sql_query_users += f"({student['user_id']}, '{student['title']}', '{student['first_name']}', '{student['middle_name']}', '{student['last_name']}', '{student['gender']}', '{generate_password()}', 3, 1),\n"
+
+student = generate_full_name()
+student['user_id'] = start_user_id
+students.append(student)
+start_user_id += 1
+sql_query_users += f"({student['user_id']}, '{student['title']}', '{student['first_name']}', '{student['middle_name']}', '{student['last_name']}', '{student['gender']}', 'PE&Q2IcD', 3, 0),\n"
 
 # Keep track of the number of courses each student is enrolled in
 student_course_count = {}
@@ -349,11 +360,12 @@ for course in courses_data:
 # Now you have lists of dictionaries for each user type: admins, lecturers, and students
 
 sql_query_users = sql_query_users.rstrip(",\n") + ";\n"
+sql_query_courses = sql_query_courses.rstrip(",\n") + ";\n"
 sql_query_enrolled = sql_query_enrolled.rstrip(",\n") + ";\n"
 sql_query_teaches = sql_query_teaches.rstrip(",\n") + ";\n"
 sql_query_administrates = sql_query_administrates.rstrip(",\n") + ";\n"
 
 with open("insert_queries.sql", "w") as sql_file:
-    sql_file.write(sql_query_headers+"\n"+sql_query_users+"\n"+sql_query_enrolled+"\n"+sql_query_teaches+"\n"+sql_query_administrates)
+    sql_file.write(sql_query_headers+"\n"+sql_query_users+"\n"+sql_query_courses+"\n"+sql_query_enrolled+"\n"+sql_query_teaches+"\n"+sql_query_administrates)
 
 print("insert_queries done")
