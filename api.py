@@ -59,20 +59,27 @@ def login():
 @app.route('/create_course', methods=['POST'])
 def create_course():
     data = request.get_json()
+    user_type = data['user_type']
     course_code = data['course_code']
     course_name = data['course_name']
-    try:
-        conn = connection()
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO Courses (CourseCode, CourseName) VALUES (%s, %s)',
-                     (course_code, course_name))
-        conn.commit()
-        conn.close()
-        response = {'message': 'Course created successfully'}
-        return jsonify(response), 201
-    except Exception as e:
-        response = {'error': str(e)}
-        return jsonify(response), 500
+    
+    if user_type == 1 :
+        try:
+            conn = connection()
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO Courses (CourseCode, CourseName) VALUES (%s, %s)',
+                        (course_code, course_name))
+            conn.commit()
+            conn.close()
+            response = {'message': 'Course created successfully'}
+            return jsonify(response), 201
+        except Exception as e:
+            response = {'error': str(e)}
+            return jsonify(response), 500
+    else:
+            response = {'message': 'User not an admin, access denied'}
+            return jsonify(response), 201
+
 
 # Retrieve Courses
 @app.route('/courses', methods=['GET'])
@@ -89,27 +96,88 @@ def courses():
         response = {'error': str(e)}
         return jsonify(response), 500
 
-# Register for Course
-@app.route('/register_course', methods=['POST'])
-def register_course():
-    data = request.get_json()
-    student_id = data['student_id']
-    course_id = data['course_id']
+@app.route('/courses/students/<int:student_id>', methods=['GET'])
+def student_courses(student_id): 
     try:
         conn = connection()
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO Enrolled (StudentID, CourseID) VALUES (%s, %s)',
-                     (student_id, course_id))
-        conn.commit()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT Courses.* FROM Enrolled JOIN Courses ON Enrolled.CourseID = Courses.CourseID WHERE Enrolled.StudentID = %s',
+                               (student_id,))
+        courses = cursor.fetchall()
         conn.close()
-        response = {'message': 'Registered for course successfully'}
-        return jsonify(response), 201
+        # courses_list = [{'CourseCode': course[0], 'CourseName': course[1]} for course in courses]
+        return jsonify(courses), 200
+    except Exception as e:
+        response = {'error': str(e)}
+        return jsonify(response), 500
+    
+@app.route('/courses/lecturer/<int:lecturer_id>', methods=['GET'])
+def teacher_courses(lecturer_id): 
+    try:
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT Courses.* FROM Teaches JOIN Courses ON Teaches.CourseID = Courses.CourseID WHERE Teaches.LecturerID = %s',
+                               (lecturer_id,))
+        courses = cursor.fetchall()
+        conn.close()
+        # courses_list = [{'CourseCode': course[0], 'CourseName': course[1]} for course in courses]
+        return jsonify(courses), 200
     except Exception as e:
         response = {'error': str(e)}
         return jsonify(response), 500
 
+
+# Register for Course
+@app.route('/register_course', methods=['POST'])
+def register_course():
+    data = request.get_json()
+    user_type = data['user_type']
+    student_id = data['student_id']
+    course_id = data['course_id']
+
+    if user_type == 3 :
+        try:
+            conn = connection()
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO Enrolled (StudentID, CourseID) VALUES (%s, %s)',
+                        (student_id, course_id))
+            conn.commit()
+            conn.close()
+            response = {'message': 'Registered for course successfully'}
+            return jsonify(response), 201
+        except Exception as e:
+            response = {'error': str(e)}
+            return jsonify(response), 500
+    else:
+        response = {'message': 'Not a student : connot register for courses'}
+        return jsonify(response), 201
+    
+@app.route('/assign_course', methods=['POST'])
+def assign_course():
+    data = request.get_json()
+    user_type = data['user_type']
+    lecturer_id = data['student_id']
+    course_id = data['course_id']
+
+    if user_type == 2 :
+        try:
+            conn = connection()
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO Teaches (LecturerID, CourseID) VALUES (%s, %s)',
+                        (lecturer_id, course_id))
+            conn.commit()
+            conn.close()
+            response = {'message': 'Registered for course successfully'}
+            return jsonify(response), 201
+        except Exception as e:
+            response = {'error': str(e)}
+            return jsonify(response), 500
+    else:
+        response = {'message': 'Not a lecturer : connot be assigned to courses'}
+        return jsonify(response), 201
+
 # Retrieve Members
-@app.route('/members/<int:course_id>', methods=['GET'])
+@app.route('/members/<int:course_code>', methods=['GET'])
 def members(course_id):
     try:
         conn = connection()
@@ -125,14 +193,37 @@ def members(course_id):
         return jsonify(response), 500
 
 # Retrieve Calendar Events
-@app.route('/calendar_events/<int:calendar_event_id>', methods=['GET'])
-def calendar_events(calendar_event_id):
+@app.route('/calendar_events/<string:course_code>', methods=['GET'])
+def calendar_events(course_code):
     try:
         conn = connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute('SELECT * FROM CalendarEvents WHERE CalendarEventID = %s',
-                              (calendar_event_id,))
+        cursor.execute('SELECT ce.CalendarEventID, ce.StartDate, ce.EndDate FROM CalendarEvents ce JOIN Sections s ON ce.SectionID = s.SectionID WHERE s.CourseID = (SELECT CourseID FROM Courses WHERE CourseCode = %s)',
+                              (course_code,))
         events = cursor.fetchall()
+        conn.close()
+        # events_list = [{'CalendarEventID': event[0], 'StartDate': event[1], 'EndDate': event[2]} for event in events]
+        return jsonify(events), 200
+    except Exception as e:
+        response = {'error': str(e)}
+        return jsonify(response), 500
+    
+@app.route('/student_calendar_events/<int:student_id>', methods=['GET'])
+def student_calendar_events(student_id):
+    try:
+        conn = connection()
+        cursor = conn.cursor(dictionary=True)
+        events = []
+
+        cursor.execute('SELECT Courses.* FROM Enrolled JOIN Courses ON Enrolled.CourseID = Courses.CourseID WHERE Enrolled.StudentID = %s',
+                               (student_id,))
+        courses = cursor.fetchall()
+
+        for course in courses :
+            cursor.execute('SELECT ce.CalendarEventID, ce.StartDate, ce.EndDate FROM CalendarEvents ce JOIN Sections s ON ce.SectionID = s.SectionID WHERE s.CourseID = (SELECT CourseID FROM Courses WHERE CourseCode = %s)',
+                                (course['CourseCode'],))
+            events.extend(cursor.fetchall())
+
         conn.close()
         # events_list = [{'CalendarEventID': event[0], 'StartDate': event[1], 'EndDate': event[2]} for event in events]
         return jsonify(events), 200
@@ -144,31 +235,38 @@ def calendar_events(calendar_event_id):
 @app.route('/create_calendar_event', methods=['POST'])
 def create_calendar_event():
     data = request.get_json()
+    user_type = data['user_type']
     course_id = data['course_id']
     start_date = data['start_date']
     end_date = data['end_date']
-    try:
-        conn = connection()
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO CalendarEvents (SectionID, StartDate, EndDate) VALUES (%s, %s, %s)',
-                     (course_id, start_date, end_date))
-        conn.commit()
-        conn.close()
-        response = {'message': 'Calendar event created successfully'}
+
+    if user_type != 3 :
+        try:
+            conn = connection()
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO CalendarEvents (SectionID, StartDate, EndDate) VALUES (%s, %s, %s)',
+                        (course_id, start_date, end_date))
+            conn.commit()
+            conn.close()
+            response = {'message': 'Calendar event created successfully'}
+            return jsonify(response), 201
+        except Exception as e:
+            response = {'error': str(e)}
+            return jsonify(response), 500
+    else:
+        response = {'message': 'Students connot create calendar events'}
         return jsonify(response), 201
-    except Exception as e:
-        response = {'error': str(e)}
-        return jsonify(response), 500
+
 
 # Forums
 # Retrieve Forums
-@app.route('/forums/<int:forum_id>', methods=['GET'])
-def forums(forum_id):
+@app.route('/forums/<string:course_code>', methods=['GET'])
+def forums(course_code):
     try:
         conn = connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute('SELECT * FROM DiscussionForums WHERE DiscussionForumID = %s',
-                              (forum_id,))
+        cursor.execute('SELECT DF.* FROM DiscussionForums DF JOIN Sections S ON DF.SectionID = S.SectionID WHERE S.CourseID = (SELECT CourseID FROM Courses WHERE CourseCode = %s)',
+                              (course_code,))
         forums = cursor.fetchall()
         conn.close()
         # forums_list = [{'DiscussionForum': forum[0], 'DiscussionForumTitle': forum[1]} for forum in forums]
@@ -181,24 +279,31 @@ def forums(forum_id):
 @app.route('/create_forum', methods=['POST'])
 def create_forum():
     data = request.get_json()
+    user_type = data['user_type']
     section_id = data['course_id']
     forum_title = data['forum_title']
     created_on = data['created_on']
     created_by = data['created_by']
     forum_description = data['forum_description']
-    try:
-        conn = connection()
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO DiscussionForums (SectionID, CreatedOn, CreatedBy, DiscussionForumTitle, DiscussionForumDescription) VALUES (%s, %s, %s, %s, %s)',
-                     (section_id, created_on, created_by, forum_title, forum_description))
-        conn.commit()
-        conn.close()
-        response = {'message': 'Forum created successfully'}
-        return jsonify(response), 201
-    except Exception as e:
-        response = {'error': str(e)}
-        return jsonify(response), 500
 
+    if user_type != 3 :
+        try:
+            conn = connection()
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO DiscussionForums (SectionID, CreatedOn, CreatedBy, DiscussionForumTitle, DiscussionForumDescription) VALUES (%s, %s, %s, %s, %s)',
+                        (section_id, created_on, created_by, forum_title, forum_description))
+            conn.commit()
+            conn.close()
+            response = {'message': 'Forum created successfully'}
+            return jsonify(response), 201
+        except Exception as e:
+            response = {'error': str(e)}
+            return jsonify(response), 500
+    else:
+        response = {'message': 'Students connot create discussion forums'}
+        return jsonify(response), 201
+
+    
 # Discussion Threads
 # Retrieve Threads
 @app.route('/threads/<int:forum_thread_id>', methods=['GET'])

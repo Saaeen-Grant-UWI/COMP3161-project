@@ -2,6 +2,8 @@ import random
 import string
 from faker import Faker
 
+fake = Faker()
+
 courses_data = [
     {'CourseID': 1, 'CourseCode': 'COMP2140', 'CourseName': 'Introduction to Computer Science'},
     {'CourseID': 2, 'CourseCode': 'MATH1250', 'CourseName': 'Calculus I'},
@@ -204,7 +206,6 @@ courses_data = [
     {'CourseID': 199, 'CourseCode': 'CHEM4910', 'CourseName': 'Green Chemistry'},
     {'CourseID': 200, 'CourseCode': 'ART2700', 'CourseName': 'Sculpture Installation'}
 ]
-fake = Faker()
 
 # Function to generate a random password excluding specific characters
 def generate_password():
@@ -215,10 +216,10 @@ def generate_password():
     random.shuffle(char_list)
     return ''.join(char_list)
 
+# Function to generate a full name
 def generate_full_name(lecturer_mode=False):
     genders = ["F", "M"]
     title = []
-
     gender = random.choice(genders)
 
     if gender == "M":
@@ -238,6 +239,7 @@ def generate_full_name(lecturer_mode=False):
     return {"title": random.choice(title), "first_name": first_name, "middle_name": middle_name,
             "last_name": last_name, "gender": gender}
 
+# Number of users for each type
 num_users_type_1 = 1000
 num_users_type_2 = 50
 num_users_type_3 = 100000
@@ -245,84 +247,113 @@ num_users_type_3 = 100000
 # Starting user ID
 start_user_id = 100000000
 
-# Initialize lists to hold the course assignments for each teacher and administrators for each course
-teachers_courses = {}
-course_admins = {}
+sql_query_headers = "TRUNCATE TABLE Users;\nTRUNCATE TABLE Teaches;\nTRUNCATE TABLE Administrates;\nTRUNCATE TABLE Enrolled;\n"
+sql_query_users = "INSERT INTO Users (UserID, Title, FirstName, MiddleName, LastName, Gender, Password, Type) VALUES\n"
+sql_query_enrolled = "INSERT INTO Enrolled (StudentID, CourseID) VALUES\n"
+sql_query_teaches = "INSERT INTO Teaches (LecturerID, CourseID) VALUES\n"
+sql_query_administrates = "INSERT INTO Administrates (AdminID, CourseID) VALUES\n"
 
-# Generate course assignments for each teacher
-for i in range(num_users_type_2):
-    teacher_id = start_user_id + num_users_type_1 + i
-    courses = random.sample(courses_data, 4)  # Select 4 random courses for each teacher
-    teachers_courses[teacher_id] = [course['CourseID'] for course in courses]
+# Generate admin users
+admins = []
+for _ in range(num_users_type_1):
+    admin = generate_full_name()
+    admin['user_id'] = start_user_id
+    admins.append(admin)
+    start_user_id += 1
+    sql_query_users += f"({admin['user_id']}, '{admin['title']}', '{admin['first_name']}', '{admin['middle_name']}', '{admin['last_name']}', '{admin['gender']}', '{generate_password()}', 1),\n"
 
-# Generate administrators for each course
+# Generate lecturer users
+lecturers = []
+for _ in range(num_users_type_2):
+    lecturer = generate_full_name(lecturer_mode=True)
+    lecturer['user_id'] = start_user_id
+    lecturers.append(lecturer)
+    start_user_id += 1
+    sql_query_users += f"({lecturer['user_id']}, '{lecturer['title']}', '{lecturer['first_name']}', '{lecturer['middle_name']}', '{lecturer['last_name']}', '{lecturer['gender']}', '{generate_password()}', 2),\n"
+
+
+# Generate student users
+students = []
+for _ in range(num_users_type_3):
+    student = generate_full_name()
+    student['user_id'] = start_user_id
+    students.append(student)
+    start_user_id += 1
+    sql_query_users += f"({student['user_id']}, '{student['title']}', '{student['first_name']}', '{student['middle_name']}', '{student['last_name']}', '{student['gender']}', '{generate_password()}', 3),\n"
+
+# Keep track of the number of courses each student is enrolled in
+student_course_count = {}
+# Generate enrollments
+enrollments = []
+
+for student in students:
+    # Ensure each student is enrolled in at least one course
+    course_count = random.randint(3, 6)
+    student_course_count[student['user_id']] = course_count
+    
+    # Shuffle the list of courses to distribute courses randomly
+    
+    random.shuffle(courses_data)
+    for course in courses_data[:course_count]:
+        sql_query_enrolled += f"({student['user_id']}, {course['CourseID']}),\n"
+        course_count -= 1
+        if course_count == 0:
+            break
+
+
+# Shuffle the list of lecturers to distribute courses randomly
+
+# Keep track of the number of courses each lecturer teaches
+lecturer_course_count = {}
+
+# Generate teacher-course assignments
+teaches_assignments = []
+
+for lecturer in lecturers:
+    # Ensure each lecturer teaches at least one course
+    course_count = random.randint(1, 5)
+    lecturer_course_count[lecturer['user_id']] = course_count
+    
+    # Shuffle the list of courses to distribute courses randomly
+    random.shuffle(courses_data)
+    
+    for course in courses_data[:course_count]:
+        sql_query_teaches += f"({lecturer['user_id']}, {course['CourseID']}),\n"
+        course_count -= 1
+        if course_count == 0:
+            break
+
+
+
+# Keep track of the number of admins for each course
+course_admin_count = {}
+
+# Generate admin-course assignments
+admin_assignments = []
+
+random.shuffle(courses_data)
 for course in courses_data:
-    course_id = course['CourseID']
-    admins = random.sample(range(start_user_id, start_user_id + num_users_type_1), 5)  # Select 5 random admins for each course
-    course_admins[course_id] = admins
+    # Randomly select admins for each course
+    admin_count = random.randint(9, 12)
+    course_admin_count[course['CourseID']] = admin_count
+    
+    # Shuffle the list of admins to distribute admins randomly
+    
+    for admin in admins[:admin_count]:
+        sql_query_administrates += f"({admin['user_id']}, {course['CourseID']}),\n"
+        admin_count -= 1
+        if admin_count == 0:
+            break
 
-# Write SQL queries to insert users, teachers, and their course assignments into the database
+
+# Now you have lists of dictionaries for each user type: admins, lecturers, and students
+
+sql_query_users = sql_query_users.rstrip(",\n") + ";\n"
+sql_query_enrolled = sql_query_enrolled.rstrip(",\n") + ";\n"
+sql_query_teaches = sql_query_teaches.rstrip(",\n") + ";\n"
+sql_query_administrates = sql_query_administrates.rstrip(",\n") + ";\n"
+
 with open("insert_queries.sql", "w") as sql_file:
-    # SQL query to insert users
-    sql_query_users = "TRUNCATE TABLE Users;\nTRUNCATE TABLE Teaches;\nTRUNCATE TABLE Administrates;\nTRUNCATE TABLE Enrolled;\n" + "INSERT INTO Users (UserID, Title, FirstName, MiddleName, LastName, Gender, Password, Type) VALUES\n"
+    sql_file.write(sql_query_headers+"\n"+sql_query_users+"\n"+sql_query_enrolled+"\n"+sql_query_teaches+"\n"+sql_query_administrates)
 
-    # SQL query to insert course assignments for teachers
-    sql_query_teaches = "INSERT INTO Teaches (LecturerID, CourseID) VALUES\n"
-
-    # SQL query to insert administrators for each course
-    sql_query_administrates = "INSERT INTO Administrates (AdminID, CourseID) VALUES\n"
-
-    # Generating queries for type 1 users
-    for i in range(num_users_type_1):
-        user_id = start_user_id + i
-        name = generate_full_name()
-        password = generate_password()
-        sql_query_users += f"({user_id}, '{name['title']}', '{name['first_name']}', '{name['middle_name']}', '{name['last_name']}', '{name['gender']}', '{password}', 1),\n"
-
-    # Generating queries for type 2 users (teachers)
-    for i in range(num_users_type_2):
-        user_id = start_user_id + num_users_type_1 + i
-        name = generate_full_name(lecturer_mode=True)
-        password = generate_password()
-        sql_query_users += f"({user_id}, '{name['title']}', '{name['first_name']}', '{name['middle_name']}', '{name['last_name']}', '{name['gender']}', '{password}', 2),\n"
-        # Insert course assignments for this teacher
-        for course_id in teachers_courses[user_id]:
-            sql_query_teaches += f"({user_id}, {course_id}),\n"
-
-    # Generating queries for type 3 users
-    for i in range(num_users_type_3):
-        user_id = start_user_id + num_users_type_1 + num_users_type_2 + i
-        name = generate_full_name()
-        password = generate_password()
-        sql_query_users += f"({user_id}, '{name['title']}', '{name['first_name']}', '{name['middle_name']}', '{name['last_name']}', '{name['gender']}', '{password}', 3),\n"
-
-    # SQL query to insert users into the Enrolled table
-    sql_query_enrolled = "TRUNCATE TABLE Enrolled;\nINSERT INTO Enrolled (StudentID, CourseID) VALUES\n"
-
-    # Generate enrollments for each student
-    for i in range(num_users_type_3):
-        student_id = start_user_id + num_users_type_1 + num_users_type_2 + i
-        num_enrollments = random.randint(3, 6)  # Randomly select between 3 to 6 courses for each student
-        enrolled_courses = random.sample(courses_data, num_enrollments)
-        for course in enrolled_courses:
-            course_id = course['CourseID']
-            sql_query_enrolled += f"({student_id}, {course_id}),\n"
-
-    sql_query_users = sql_query_users.rstrip(",\n") + ";\n"
-    sql_query_teaches = sql_query_teaches.rstrip(",\n") + ";\n"
-    sql_query_enrolled = sql_query_enrolled.rstrip(",\n") + ";\n"
-
-    # Generating queries for inserting administrators for each course
-    for course_id, admins in course_admins.items():
-        for admin_id in admins:
-            sql_query_administrates += f"({admin_id}, {course_id}),\n"
-
-    sql_query_administrates = sql_query_administrates.rstrip(",\n") + ";\n"
-
-    # Write the queries to the SQL file
-    sql_file.write(sql_query_users)
-    sql_file.write(sql_query_teaches)
-    sql_file.write(sql_query_administrates)
-    sql_file.write(sql_query_enrolled)
-
-print("SQL file 'insert_queries.sql' created.")
+print("insert_queries done")
