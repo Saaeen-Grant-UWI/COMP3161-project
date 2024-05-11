@@ -488,10 +488,6 @@ def add_reply():
                 return jsonify(response), 401
 
 
-
-
-
-
             cursor.execute('INSERT INTO DiscussionReplies (DiscussionThreadID, CreatedOn, CreatedBy, DiscussionReplyTitle, DiscussionReplyContent, ReplyToReply) VALUES (%s, %s, %s, %s, %s, %s)',
                         (thread_id, created_on, created_by, reply_title, reply_content, reply_to_reply))
             conn.commit()
