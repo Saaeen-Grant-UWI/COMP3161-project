@@ -1,3 +1,5 @@
+# Group 21
+
 from flask import Flask, jsonify, request
 import mysql.connector
 
@@ -468,6 +470,31 @@ def add_reply():
         try:
             conn = connection()
             cursor = conn.cursor()
+
+            # Step 1: Find DiscussionForumID using DiscussionThreadID
+            cursor.execute('SELECT DiscussionForumID FROM DiscussionThreads WHERE DiscussionThreadID = %s', (thread_id,))
+            discussion_forum_id = cursor.fetchone()[0]
+
+            # Step 2: Find SectionID using DiscussionForumID
+            cursor.execute('SELECT SectionID FROM DiscussionForums WHERE DiscussionForumID = %s', (discussion_forum_id,))
+            section_id = cursor.fetchone()[0]
+
+            # Step 3: Find CourseID using SectionID
+            cursor.execute('SELECT CourseID FROM Sections WHERE SectionID = %s', (section_id,))
+            course_id = cursor.fetchone()[0]
+
+            cursor.execute('SELECT StudentID FROM Enrolled WHERE CourseID = %s', (course_id,))
+            enrolled = cursor.fetchone()[0]
+
+            if not enrolled:
+                response = {'message': 'Student not enrolled in course'}
+                return jsonify(response), 401
+
+
+
+
+
+
             cursor.execute('INSERT INTO DiscussionReplies (DiscussionThreadID, CreatedOn, CreatedBy, DiscussionReplyTitle, DiscussionReplyContent, ReplyToReply) VALUES (%s, %s, %s, %s, %s, %s)',
                         (thread_id, created_on, created_by, reply_title, reply_content, reply_to_reply))
             conn.commit()
@@ -623,7 +650,7 @@ def courses_with_50_or_more_students():
     try:
         conn = connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute('SELECT CourseID, COUNT(StudentID) AS StudentCount FROM Enrolled GROUP BY CourseID HAVING StudentCount >= 50')
+        cursor.execute('SELECT * FROM courses_with_50_or_more_students')
         courses = cursor.fetchall()
         conn.close()
         # courses_list = [{'CourseID': course[0], 'StudentCount': course[1]} for course in courses]
@@ -638,7 +665,7 @@ def students_with_5_or_more_courses():
     try:
         conn = connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute('SELECT StudentID, COUNT(CourseID) AS CourseCount FROM Enrolled GROUP BY StudentID HAVING CourseCount >= 5')
+        cursor.execute('SELECT * FROM students_with_5_or_more_courses')
         students = cursor.fetchall()
         conn.close()
         # students_list = [{'StudentID': student[0], 'CourseCount': student[1]} for student in students]
@@ -653,7 +680,7 @@ def lecturers_with_3_or_more_courses():
     try:
         conn = connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute('SELECT LecturerID, COUNT(CourseID) AS CourseCount FROM Teaches GROUP BY LecturerID HAVING CourseCount >= 3')
+        cursor.execute('SELECT * FROM lecturers_with_3_or_more_courses')
         lecturers = cursor.fetchall()
         conn.close()
         # lecturers_list = [{'UserID': lecturer[0], 'CourseCount': lecturer[1]} for lecturer in lecturers]
@@ -668,7 +695,7 @@ def top_10_enrolled_courses():
     try:
         conn = connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute('SELECT CourseID, COUNT(StudentID) AS StudentCount FROM Enrolled GROUP BY CourseID ORDER BY StudentCount DESC LIMIT 10')
+        cursor.execute('SELECT * FROM top_10_enrolled_courses')
         courses = cursor.fetchall()
         conn.close()
         # courses_list = [{'CourseID': course[0], 'StudentCount': course[1]} for course in courses]
@@ -683,7 +710,7 @@ def top_10_students_highest_averages():
     try:
         conn = connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute('SELECT StudentID, AVG(Grade) AS AverageGrade FROM Grades GROUP BY StudentID ORDER BY AverageGrade DESC LIMIT 10')
+        cursor.execute('SELECT * FROM top_10_students_highest_averages')
         students = cursor.fetchall()
         conn.close()
         # students_list = [{'StudentID': student[0], 'AverageGrade': student[1]} for student in students]

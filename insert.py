@@ -1,3 +1,5 @@
+# Group 21
+
 import random
 import string
 from faker import Faker
@@ -207,7 +209,6 @@ courses_data = [
     {'CourseID': 200, 'CourseCode': 'ART2700', 'CourseName': 'Sculpture Installation'}
 ]
 
-# Function to generate a random password excluding specific characters
 def generate_password():
     characters = string.ascii_letters + string.digits
     special_chars = "!@#$%&()[]{}?"
@@ -292,17 +293,13 @@ students.append(student)
 start_user_id += 1
 sql_query_users += f"({student['user_id']}, '{student['title']}', '{student['first_name']}', '{student['middle_name']}', '{student['last_name']}', '{student['gender']}', 'PE&Q2IcD', 3, 0),\n"
 
-# Keep track of the number of courses each student is enrolled in
 student_course_count = {}
-# Generate enrollments
 enrollments = []
 
 for student in students:
-    # Ensure each student is enrolled in at least one course
     course_count = random.randint(3, 6)
     student_course_count[student['user_id']] = course_count
     
-    # Shuffle the list of courses to distribute courses randomly
     
     random.shuffle(courses_data)
     for course in courses_data[:course_count]:
@@ -312,20 +309,15 @@ for student in students:
             break
 
 
-# Shuffle the list of lecturers to distribute courses randomly
 
-# Keep track of the number of courses each lecturer teaches
 lecturer_course_count = {}
 
-# Generate teacher-course assignments
 teaches_assignments = []
 
 for lecturer in lecturers:
-    # Ensure each lecturer teaches at least one course
     course_count = random.randint(1, 5)
     lecturer_course_count[lecturer['user_id']] = course_count
     
-    # Shuffle the list of courses to distribute courses randomly
     random.shuffle(courses_data)
     
     for course in courses_data[:course_count]:
@@ -336,19 +328,15 @@ for lecturer in lecturers:
 
 
 
-# Keep track of the number of admins for each course
 course_admin_count = {}
 
-# Generate admin-course assignments
 admin_assignments = []
 
 random.shuffle(courses_data)
 for course in courses_data:
-    # Randomly select admins for each course
     admin_count = random.randint(9, 12)
     course_admin_count[course['CourseID']] = admin_count
     
-    # Shuffle the list of admins to distribute admins randomly
     
     for admin in admins[:admin_count]:
         sql_query_administrates += f"({admin['user_id']}, {course['CourseID']}),\n"
@@ -357,7 +345,6 @@ for course in courses_data:
             break
 
 
-# Now you have lists of dictionaries for each user type: admins, lecturers, and students
 
 sql_query_users = sql_query_users.rstrip(",\n") + ";\n"
 sql_query_courses = sql_query_courses.rstrip(",\n") + ";\n"
