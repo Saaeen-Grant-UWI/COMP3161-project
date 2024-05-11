@@ -471,15 +471,12 @@ def add_reply():
             conn = connection()
             cursor = conn.cursor()
 
-            # Step 1: Find DiscussionForumID using DiscussionThreadID
             cursor.execute('SELECT DiscussionForumID FROM DiscussionThreads WHERE DiscussionThreadID = %s', (thread_id,))
             discussion_forum_id = cursor.fetchone()[0]
 
-            # Step 2: Find SectionID using DiscussionForumID
             cursor.execute('SELECT SectionID FROM DiscussionForums WHERE DiscussionForumID = %s', (discussion_forum_id,))
             section_id = cursor.fetchone()[0]
 
-            # Step 3: Find CourseID using SectionID
             cursor.execute('SELECT CourseID FROM Sections WHERE SectionID = %s', (section_id,))
             course_id = cursor.fetchone()[0]
 
